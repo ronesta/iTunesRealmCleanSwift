@@ -1,14 +1,18 @@
 //
-//  ViewController.swift
+//  SearchViewController.swift
 //  iTunesRealmCleanSwift
 //
-//  Created by Ибрагим Габибли on 11.02.2025.
+//  Created by Ибрагим Габибли on 18.02.2025.
 //
 
 import UIKit
 import SnapKit
 
 final class SearchViewController: UIViewController {
+    var interactor: SearchInteractorProtocol?
+    var router: (NSObjectProtocol & SearchRouterProtocol)?
+    var storageManager: StorageManagerProtocol?
+
     let searchBar: UISearchBar = {
         let searchBar = UISearchBar()
         searchBar.searchBarStyle = .minimal
@@ -59,56 +63,20 @@ final class SearchViewController: UIViewController {
             make.horizontalEdges.equalToSuperview()
         }
     }
+}
 
-    func searchAlbums(with term: String) {
-        self.albums = StorageManager.shared.fetchAlbums(for: term)
+// MARK: - SearchViewProtocol
+extension SearchViewController: SearchViewProtocol {
+    func displayAlbums(viewModel: Search.ViewModel) {
+        albums = viewModel.albums
+        collectionView.reloadData()
+    }
 
-        guard self.albums.isEmpty else {
-            self.collectionView.reloadData()
-            return
-        }
-
-        NetworkManager.shared.fetchAlbums(albumName: term) { [weak self] result, error in
-            if let error {
-                print("Error getting albums: \(error)")
-                return
-            }
-
-            guard let result else {
-                return
-            }
-
-            var albumsToSave: [(album: Album, imageData: Data)] = []
-            let group = DispatchGroup()
-
-            result.forEach { res in
-                group.enter()
-                NetworkManager.shared.fetchImage(from: res.artworkUrl100) { data, error in
-                    if let error {
-                        print("Failed to load image: \(error)")
-                        return
-                    }
-
-                    guard let data else {
-                        print("No data for image")
-                        return
-                    }
-
-                    albumsToSave.append((album: res, imageData: data))
-                    group.leave()
-                }
-            }
-
-            group.notify(queue: .main) { [weak self] in
-                StorageManager.shared.saveAlbums(albumsToSave, for: term)
-                print("Successfully loaded \(albumsToSave.count) albums.")
-
-                DispatchQueue.main.async {
-                    self?.albums = StorageManager.shared.fetchAlbums(for: term)
-                    self?.collectionView.reloadData()
-                }
-            }
-        }
+    func displayError(_ message: String) {
+        let alert = UIAlertController(title: "Error", message: message, preferredStyle: .alert)
+        let okAction = UIAlertAction(title: "OK", style: .default, handler: nil)
+        alert.addAction(okAction)
+        present(alert, animated: true)
     }
 }
 
@@ -129,12 +97,14 @@ extension SearchViewController: UICollectionViewDataSource {
 
         let album = albums[indexPath.item]
 
-        guard let imageData = StorageManager.shared.fetchImageData(forImageId: album.artistId),
-              let image = UIImage(data: imageData) else {
-            return cell
-        }
+        interactor?.getAlbumImage(for: album) { imageData in
+            guard let imageData = imageData,
+                  let image = UIImage(data: imageData) else {
+                return
+            }
 
-        cell.configure(with: album, image: image)
+            cell.configure(with: album, image: image)
+        }
         return cell
     }
 }
@@ -143,10 +113,8 @@ extension SearchViewController: UICollectionViewDataSource {
 extension SearchViewController: UICollectionViewDelegate {
     func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
 
-        let albumViewController = AlbumViewController()
         let album = albums[indexPath.item]
-        albumViewController.album = album
-        navigationController?.pushViewController(albumViewController, animated: true)
+        router?.routeToAlbumDetail(with: album)
     }
 }
 
@@ -157,7 +125,10 @@ extension SearchViewController: UISearchBarDelegate {
         guard let searchTerm = searchBar.text, !searchTerm.isEmpty else {
             return
         }
-        StorageManager.shared.saveSearchTerm(searchTerm)
-        searchAlbums(with: searchTerm)
+
+        let request = Search.Request(searchTerm: searchTerm)
+        interactor?.searchAlbums(request: request)
+
+        storageManager?.saveSearchTerm(searchTerm)
     }
 }

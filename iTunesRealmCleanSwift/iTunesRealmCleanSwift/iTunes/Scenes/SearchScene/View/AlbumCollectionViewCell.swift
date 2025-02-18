@@ -2,7 +2,7 @@
 //  AlbumCollectionViewCell.swift
 //  iTunesRealmCleanSwift
 //
-//  Created by Ибрагим Габибли on 11.02.2025.
+//  Created by Ибрагим Габибли on 18.02.2025.
 //
 
 import UIKit

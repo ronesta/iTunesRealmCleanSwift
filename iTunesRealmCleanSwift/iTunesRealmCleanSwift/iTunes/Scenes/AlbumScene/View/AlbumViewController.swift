@@ -2,7 +2,7 @@
 //  AlbumViewController.swift
 //  iTunesRealmCleanSwift
 //
-//  Created by Ибрагим Габибли on 11.02.2025.
+//  Created by Ибрагим Габибли on 18.02.2025.
 //
 
 import Foundation
@@ -10,7 +10,8 @@ import UIKit
 import SnapKit
 
 final class AlbumViewController: UIViewController {
-    var album: RealmAlbum?
+    var interactor: AlbumInteractorProtocol
+    var album: RealmAlbum
 
     private let albumImageView: UIImageView = {
         let image = UIImageView()
@@ -42,18 +43,30 @@ final class AlbumViewController: UIViewController {
         return label
     }()
 
+    init(interactor: AlbumInteractorProtocol,
+         album: RealmAlbum
+    ) {
+        self.interactor = interactor
+        self.album = album
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     override func viewDidLoad() {
         super.viewDidLoad()
         setupViews()
-        setupAlbum()
+        fetchAlbum()
     }
 
     private func setupViews() {
-        view.backgroundColor = .white
         view.addSubview(albumImageView)
         view.addSubview(albumNameLabel)
         view.addSubview(artistNameLabel)
         view.addSubview(collectionPriceLabel)
+        view.backgroundColor = .white
 
         albumImageView.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide)
@@ -79,19 +92,19 @@ final class AlbumViewController: UIViewController {
         }
     }
 
-    private func setupAlbum() {
-        guard let album else {
-            return
-        }
+    func fetchAlbum() {
+        let request = AlbumModels.Request(album: album)
+        interactor.loadAlbumDetails(request: request)
+    }
 
-        guard let imageData = StorageManager.shared.fetchImageData(forImageId: album.artistId),
-              let image = UIImage(data: imageData) else {
-            return
-        }
+}
 
-        albumImageView.image = image
-        albumNameLabel.text = album.collectionName
-        artistNameLabel.text = album.artistName
-        collectionPriceLabel.text = "\(album.collectionPrice) $"
+// MARK: - AlbumViewProtocol
+extension AlbumViewController: AlbumViewProtocol {
+    func displayAlbumDetails(viewModel: AlbumModels.ViewModel) {
+        albumNameLabel.text = viewModel.album.collectionName
+        artistNameLabel.text = viewModel.album.artistName
+        collectionPriceLabel.text = "\(viewModel.album.collectionPrice) $"
+        albumImageView.image = viewModel.image
     }
 }
